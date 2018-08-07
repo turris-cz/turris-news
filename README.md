@@ -5,12 +5,12 @@ a way to inform Turris router owners about planned changes and possible problems
 
 News are divided to channels and user can choose to be notified only about some of
 them. At the moment following channels are defined:
-* _news_ General channel mostly used for marketing purposes.
-* _updates_ Channel with new Turris OS releases notifications and change lists.
-* _rc_ Channel used for release candidate testers. It is used for same purpose as
+* _news_: General channel mostly used for marketing purposes.
+* _updates_: Channel with new Turris OS releases notifications and change lists.
+* _rc_: Channel used for release candidate testers. It is used for same purpose as
   _updates_ but for release candidate branch.
-* _maintain_ This channel contains various news for system administrators.
-* _security_ Channel with security notices.
+* _maintain_: This channel contains various news for system administrators.
+* _security_: Channel with security notices.
 
 News format
 -----------
