@@ -1,0 +1,104 @@
+#!/bin/sh
+set -e
+
+URL_BASE="https://repo.turris.cz/news"
+URL_STAGING="https://repo.turris.cz/news-staging"
+
+
+print_help() {
+	echo "Usage: $0 [OPTION].. OPERATION [ARG].."
+	echo "Turris news fetcher."
+	echo
+	echo "Operations:"
+	echo "  update"
+	echo "    Pull index of news from server."
+	echo "  channels"
+	echo "    List available news channels."
+	echo "  list [ARG].."
+	echo "    List available news in given channel."
+	echo "  read [ARG].."
+	echo "    Print selected messages or all nessages."
+	echo "  cron"
+	echo "    Update news index and generate notifications for new ones."
+	echo "    This operation is intended to be only called from cron."
+	echo "Pass --help option after operation to get more help."
+	echo
+	echo "Options:"
+	echo "  --help, -h"
+	echo "    Print this help text."
+	echo "  --lang LANG"
+	echo "    Allows you to specify requested news language."
+	echo "  --staging"
+	echo "    Instead of default URL use staging one."
+	echo "    Staging contains not yet released messages."
+	echo "  --url URL"
+	echo "    Change URL used for getting news."
+	echo "    This can't be mixed with --staging option."
+}
+
+op_update() {
+	# TODO
+	exit 12
+}
+
+op_channels() {
+	# TODO
+	exit 12
+}
+
+op_list() {
+	# TODO
+	exit 12
+}
+
+op_read() {
+	# TODO
+	exit 12
+}
+
+op_cron() {
+	# TODO
+	exit 12
+}
+
+
+OP=
+URL=
+while [ $# -gt 0 -a -z "$OP" ]; do
+	case "$1" in
+		-h|--help)
+			print_help
+			exit 0
+			;;
+		--staging)
+			URL="$URL_STAGING"
+			;;
+		--url)
+			shift
+			URL="$1"
+			;;
+		update)
+			OP=op_update
+			;;
+		channels)
+			OP=op_channels
+			;;
+		list)
+			OP=op_list
+			;;
+		read)
+			OP=op_read
+			;;
+		cron)
+			OP=op_cron
+			;;
+	esac
+	shift
+done
+
+if [ -z "$OP" ]; then
+	print_help
+	exit 1
+fi
+
+$OP "$@"
