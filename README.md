@@ -21,9 +21,12 @@ displayed in their plain form in terminal.
 
 Files with messages has to be placed in one of directories representing channels.
 They should have following format: `YYMMDD-MESSAGE.md`. Where `YY` is used of
-year, `MM` for month and `DD` for day of notification release. `MESSAGE` have to
-be basically title of news. These messages should be written in English. There is
-also extension of this naming format for translations, see section about that.
+year, `MM` for month and `DD` for day of news release. `MESSAGE` have to be
+basically title of news. It should not contain dots (`.`), dashes (`-`), and white
+characters.
+
+Messages should be written in English. There is also extension of this naming
+format for translations, see section about that.
 
 Notification system
 -------------------
@@ -64,6 +67,19 @@ change using formating and change should be inserted in English.
 Because of previous reasons in paragraph, it is highly requested that translators
 should not change formating of message so original author can append new content
 in English without understanding it.
+
+Channel definition
+------------------
+List of channels is defined as variable `CHANNELS` at the beginning of the
+`generate.sh` script. Every defined channel then should have its directory
+containing at least `DESCRIPTION` file. That file should have following format:
+```
+Description
+cs:Popis
+de:Beschreibung
+```
+Where first line contains English description of given channel and all subsequent
+lines should start with language code and colon separated translated description.
 
 Deployment process
 ------------------
