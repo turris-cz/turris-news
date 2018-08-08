@@ -3,10 +3,12 @@ set -e
 
 URL_BASE="https://repo.turris.cz/news"
 URL_STAGING="https://repo.turris.cz/news-staging"
+LOCAL_STORE="/tmp/turris-news"
+RINDEX="$LOCAL_STORE/index"
 
 
 print_help() {
-	echo "Usage: $0 [OPTION].. OPERATION [ARG].."
+	echo "Usage: turris-news [OPTION].. OPERATION [ARG].."
 	echo "Turris news fetcher."
 	echo
 	echo "Operations:"
@@ -36,9 +38,75 @@ print_help() {
 	echo "    This can't be mixed with --staging option."
 }
 
+
+sha256() {
+	sha256sum "$1" |  cut -d " " -f 1
+}
+
+# Get some column from index from primary line (not starting with :)
+# First argument has to be index path. Second argument is first column content and
+# third one should be requested column number.
+index_prim_col() {
+	awk -F : "/^$2:/{ print \$$3 }" "$1"
+}
+
+
+# Utility function of index_update that downloads channel index.
+_subindex_update() {
+	echo "Updating '$1' channel index.." >&2
+	local INDX="$LOCAL_STORE/$1.index.gz"
+	curl "$URL/$1.index.gz" > "$INDX"
+	if [ "$(sha256 "$INDX")" != "$(index_prim_col "$RINDEX" "$1" 2)" ]; then
+		echo "Index hash does not match root index." >&2
+		return 1
+	fi
+	rm -f "$LOCAL_STORE/$1.index"
+	gunzip "$INDX"
+}
+
+# Update indexes in local store.
+# Allowed channels can be provided as arguments.
+index_update() {
+	mkdir -p "$LOCAL_STORE"
+	# Download root index
+	echo "Updating root index.." >&2
+	curl "$URL/index.gz" | gunzip > "$RINDEX"
+	# Verify repository version
+	local VERSION="$(head -1 "$RINDEX")"
+	if [ "$VERSION" != "1" ]; then
+		echo "Unsupported repository version: $VERSION" >&2
+		return 1
+	fi
+	# Download subindexes
+	if [ $# -gt 0 ]; then
+		for CHANN in "$@"; do
+			if ! grep -q "^$CHANN:" "$RINDEX"; then
+				echo "Ignoring missing channel: $CHANN" >&2
+				continue
+			fi
+			_subindex_update "$CHANN"
+		done
+	else
+		awk -F : '/^[^:]+:/{ print $1 }' "$RINDEX" | while read CHANN; do
+			_subindex_update "$CHANN"
+		done
+	fi
+	# Remove any indexes that are not in root index
+	# TODO Implement this when some channel is dropped
+}
+
 op_update() {
-	# TODO
-	exit 12
+	local CHANNS=""
+	for ARG in "$@"; do
+		if [ "$ARG" = "--help" -o "$ARG" = "-h" ]; then
+			echo "Usage: turris-news update [CHANNEL].."
+			echo "Turris news update list of available news."
+			echo "You can specify CHANNEL to update only specified channel."
+			echo "If no CHANNEL is specified then all available channels are updated"
+			exit 0
+		fi
+	done
+	index_update "$@"
 }
 
 op_channels() {
@@ -92,6 +160,10 @@ while [ $# -gt 0 -a -z "$OP" ]; do
 		cron)
 			OP=op_cron
 			;;
+		*)
+			echo "Unknown argument: $1" >&2
+			exit 1
+			;;
 	esac
 	shift
 done
@@ -99,6 +171,9 @@ done
 if [ -z "$OP" ]; then
 	print_help
 	exit 1
+fi
+if [ -z "$URL" ]; then
+	URL="$URL_BASE"
 fi
 
 $OP "$@"
