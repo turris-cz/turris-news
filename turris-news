@@ -50,12 +50,31 @@ index_prim_col() {
 	awk -F : "/^$2:/{ print \$$3 }" "$1"
 }
 
+root_index_exists() {
+	if [ ! -f "$RINDEX" ]; then
+		echo "Index is missing. Please run update first." >&2
+		return 1
+	fi
+}
+
+# Returns space separated list of all channels
+all_channels() {
+	root_index_exists
+	awk -F : '/^[^:]+:/{ print $1 }' "$RINDEX" | tr '\n' ' '
+}
+
+# Check if given argument is valid channel
+is_channel() {
+	root_index_exists
+	grep -q "^$1:" "$RINDEX"
+}
+
 
 # Utility function of index_update that downloads channel index.
 _subindex_update() {
 	echo "Updating '$1' channel index.." >&2
 	local INDX="$LOCAL_STORE/$1.index.gz"
-	curl "$URL/$1.index.gz" > "$INDX"
+	curl --fail "$URL/$1.index.gz" > "$INDX"
 	if [ "$(sha256 "$INDX")" != "$(index_prim_col "$RINDEX" "$1" 2)" ]; then
 		echo "Index hash does not match root index." >&2
 		return 1
@@ -70,7 +89,7 @@ index_update() {
 	mkdir -p "$LOCAL_STORE"
 	# Download root index
 	echo "Updating root index.." >&2
-	curl "$URL/index.gz" | gunzip > "$RINDEX"
+	curl --fail "$URL/index.gz" | gunzip > "$RINDEX"
 	# Verify repository version
 	local VERSION="$(head -1 "$RINDEX")"
 	if [ "$VERSION" != "1" ]; then
@@ -80,14 +99,14 @@ index_update() {
 	# Download subindexes
 	if [ $# -gt 0 ]; then
 		for CHANN in "$@"; do
-			if ! grep -q "^$CHANN:" "$RINDEX"; then
+			if ! is_channel "$CHANN"; then
 				echo "Ignoring missing channel: $CHANN" >&2
 				continue
 			fi
 			_subindex_update "$CHANN"
 		done
 	else
-		awk -F : '/^[^:]+:/{ print $1 }' "$RINDEX" | while read CHANN; do
+		for CHANN in $(all_channels); do
 			_subindex_update "$CHANN"
 		done
 	fi
@@ -96,7 +115,6 @@ index_update() {
 }
 
 op_update() {
-	local CHANNS=""
 	for ARG in "$@"; do
 		if [ "$ARG" = "--help" -o "$ARG" = "-h" ]; then
 			echo "Usage: turris-news update [CHANNEL].."
@@ -110,8 +128,17 @@ op_update() {
 }
 
 op_channels() {
-	# TODO
-	exit 12
+	for ARG in "$@"; do
+		if [ "$ARG" = "--help" -o "$ARG" = "-h" ]; then
+			echo "Usage: turris-news channels"
+			echo "Turris news list all available channels and their descriptions."
+			exit 0
+		fi
+	done
+	for CHANN in $(all_channels); do
+		# TODO translations
+		echo "$CHANN: $(index_prim_col "$RINDEX" "$CHANN" 3)"
+	done
 }
 
 op_list() {
