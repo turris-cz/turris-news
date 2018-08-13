@@ -143,9 +143,50 @@ op_channels() {
 	done
 }
 
+# Helper function for op_list
+_list_channel() {
+	local CHINDX="$LOCAL_STORE/$1.index"
+	if [ ! -f "$CHINDX" ]; then
+		if is_channel "$1"; then
+			echo "Channel '$1' is not updated. Run 'turris-news update' fist." >&2
+		else
+			echo "There is no such channel: $1" >&2
+		fi
+		return 1
+	fi
+	if [ -z "$(cat "$CHINDX")" ]; then
+		echo "$1: No news" >&2
+		return 0
+	fi
+	##
+	echo "$1:"
+	cat "$CHINDX" | while read LINE; do
+		DATE="$(echo "$LINE" | cut -d : -f 1)"
+		[ -n "$DATE" ] || continue # No date means translated version (we can ignore those here)
+		NAME="$(echo "$LINE" | cut -d : -f 2)"
+		echo "	$DATE-$NAME"
+	done
+}
+
 op_list() {
-	# TODO
-	exit 12
+	for ARG in "$@"; do
+		if [ "$ARG" = "--help" -o "$ARG" = "-h" ]; then
+			echo "Usage: turris-news list [CHANNEL].."
+			echo "Turris news list all available news."
+			echo "You can specify CHANNEL to list news from."
+			echo "If no CHANNEL is specified then news from all channels are listed."
+			exit 0
+		fi
+	done
+	if [ $# -gt 0 ]; then
+		for CHANN in "$@"; do
+			_list_channel "$CHANN"
+		done
+	else
+		for CHANN in $(all_channels); do
+			_list_channel "$CHANN"
+		done
+	fi
 }
 
 op_read() {
