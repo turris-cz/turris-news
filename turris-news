@@ -3,8 +3,9 @@ set -e
 
 URL_BASE="https://repo.turris.cz/news"
 URL_STAGING="https://repo.turris.cz/news-staging"
-LOCAL_STORE="/tmp/turris-news"
-RINDEX="$LOCAL_STORE/index"
+TMP_STORE="/tmp/turris-news"
+RINDEX="$TMP_STORE/index"
+READ_STORE="/usr/local/turris-news/read"
 
 
 print_help() {
@@ -75,20 +76,20 @@ is_channel() {
 # Utility function of index_update that downloads channel index.
 _subindex_update() {
 	echo "Updating '$1' channel index.." >&2
-	local INDX="$LOCAL_STORE/$1.index.gz"
+	local INDX="$TMP_STORE/$1.index.gz"
 	curl --fail "$URL/$1.index.gz" > "$INDX"
 	if [ "$(sha256 "$INDX")" != "$(index_prim_col "$RINDEX" "$1" 2)" ]; then
 		echo "Index hash does not match root index." >&2
 		return 1
 	fi
-	rm -f "$LOCAL_STORE/$1.index"
+	rm -f "$TMP_STORE/$1.index"
 	gunzip "$INDX"
 }
 
 # Update indexes in local store.
 # Allowed channels can be provided as arguments.
 index_update() {
-	mkdir -p "$LOCAL_STORE"
+	mkdir -p "$TMP_STORE"
 	# Download root index
 	echo "Updating root index.." >&2
 	curl --fail "$URL/index.gz" | gunzip > "$RINDEX"
@@ -145,7 +146,7 @@ op_channels() {
 
 # Helper function for op_list
 _list_channel() {
-	local CHINDX="$LOCAL_STORE/$1.index"
+	local CHINDX="$TMP_STORE/$1.index"
 	if [ ! -f "$CHINDX" ]; then
 		if is_channel "$1"; then
 			echo "Channel '$1' is not updated. Run 'turris-news update' fist." >&2
@@ -189,9 +190,121 @@ op_list() {
 	fi
 }
 
+# What ever news on given index line was read.
+# As first argument is expected name of channel and as second one is expected line
+# from index file representing given news.
+_news_not_read() {
+	[ ! -f "$READ_STORE" ] || \
+	! grep -q "^$1:$(echo "$2" | cut -d : -f 1):$(echo "$2" | cut -d : -f 2)$" "$READ_STORE"
+}
+# Set given news as read
+# First argument is channel name, second argument is news date and third one is
+# news name.
+_news_set_read() {
+	mkdir -p "$(dirname "$READ_STORE")"
+	if _news_not_read "$1" "$2:$3:md:0000"; then
+		echo "$1:$2:$3" >> "$READ_STORE"
+	fi
+}
+
+
+# Helper function to read one specific news
+# It expects name of channel as first argument. Second argument must be primary
+# line from index from that channel with message to be printed.
+_read_news() {
+	local DATE="$(echo "$2" | cut -d : -f 1)"
+	local NAME="$(echo "$2" | cut -d : -f 2)"
+	local EXT="$(echo "$2" | cut -d : -f 3)"
+	local TMPN="$(mktemp).gz"
+	# TODO translations
+	curl -sS --fail "$URL/$1/$DATE-$NAME.$EXT.gz" > "$TMPN"
+	if [ "$(sha256 "$TMPN")" != "$(echo "$2" | cut -d : -f 4)" ]; then
+		echo "Hash of downloaded news does not match the one in index." >&2
+		rm "$TMPN"
+		return 1
+	fi
+	echo "##################################################################################"
+	gunzip -c "$TMPN"
+	rm "$TMPN"
+	_news_set_read "$1" "$DATE" "$NAME"
+}
+
+# Helper function for op_read printing single news.
+# It expects as first argument string identifying news (date or name or both
+# separated by dash). As second optional argument is expected limit for channels.
+_read_lookup_news() {
+	local REGEXP="^[^:]\+:$1:md:"
+	if echo "$1" | grep -q "^[0-9]\{6\}"; then
+		REGEXP="^$(echo "$1" | cut -c -6):$(echo "$1" | cut -c 8-):md:"
+	fi
+	local CHANNS="$2"
+	[ -n "$CHANNS" ] || CHANNS="$(all_channels)"
+	local CHANN
+	for CHANN in $CHANNS; do
+		grep "$REGEXP" "$TMP_STORE/$CHANN.index" | while read LN; do
+			_read_news "$CHANN" "$LN"
+		done
+	done
+}
+
+# Helper function for op_read printing all messages from given channel.
+# As argument you have to pass name of channel.
+_read_channel_news() {
+	grep "^[^:]\+:" "$TMP_STORE/$1.index" | while read LN; do
+		if $ALL || _news_not_read "$1" "$LN"; then
+			_read_news "$1" "$LN"
+		fi
+	done
+}
+
 op_read() {
-	# TODO
-	exit 12
+	local ALL=false
+	for ARG in "$@"; do
+		case "$ARG" in
+			-h|--help)
+				echo "Usage: turris-news read [-a] [CHANNEL [NEWS]..].. [NEWS].."
+				echo "Turris news print news content."
+				echo "You can either specify what news you want to print (in format as list print it)"
+				echo "or you can specify channel and new on top of that."
+				echo "If only channel or nothing is specified then unread news are printed."
+				echo "Printing news once marks it as read. You can later view it either by"
+				echo "Explicitly specifying it or by using -a (--all) option.a"
+				exit 0
+				;;
+			-a|--all)
+				ALL=true
+				;;
+		esac
+	done
+	if [ $# -eq 0 -o $# -eq 1 -a \( "$1" = "-a" -o "$1" = "--all" \) ]; then
+		# No channel is specified so list all channels
+		for CHANN in $(all_channels); do
+			_read_channel_news "$CHANN"
+		done
+		return 0
+	fi
+	# Go trough arguments (ignoring only -a) and handle CHANNEL and NEWS chains
+	local CHANN=
+	local CHANN_UNREAD=true
+	for ARG in "$@"; do
+		if [ "$ARG" = "-a" ]; then
+			CHANN=
+			continue
+		fi
+		if is_channel "$ARG"; then
+			if [ -n "$CHANN" ]; then # No message for channel was specified
+				_read_channel_news "$CHANN"
+			fi
+			CHANN="$ARG"
+			CHANN_UNREAD=true
+			continue
+		fi
+		[ -z "$CHANN" ] || CHANN_UNREAD=false
+		_read_lookup_news "$ARG" "$CHANN"
+	done
+	if [ -n "$CHANN" ] && $CHANN_UNREAD; then # Handle tail channel
+		_read_channel_news "$CHANN"
+	fi
 }
 
 op_cron() {
