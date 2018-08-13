@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
+. /lib/functions.sh
 
 URL_BASE="https://repo.turris.cz/news"
 URL_STAGING="https://repo.turris.cz/news-staging"
@@ -313,6 +314,7 @@ op_cron() {
 }
 
 
+config_load turris-news
 OP=
 URL=
 while [ $# -gt 0 -a -z "$OP" ]; do
@@ -359,7 +361,8 @@ if [ -z "$OP" ]; then
 	exit 1
 fi
 if [ -z "$URL" ]; then
-	URL="$URL_BASE"
+	config_get_bool STAGING source staging 0
+	[ "$STAGING" = "0" ] && URL="$URL_BASE" || URL="$URL_STAGING"
 fi
 
 $OP "$@"

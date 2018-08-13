@@ -49,8 +49,8 @@ pull appropriate language (unless overwritten by `--lang` argument). Be aware th
 every message is sent only once and that is when it is first seen and that can be
 when there is no translation for it yet.
 
-You can also set UCI option `turris_news.cron.staging=1` which has same effect as
-calling `turris-news --staging cron`.
+You can also set UCI option `turris_news.source.staging=1` which has same effect as
+calling `turris-news --staging`.
 
 Translations
 ------------
