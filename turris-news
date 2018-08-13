@@ -36,6 +36,8 @@ print_help() {
 	echo "  --url URL"
 	echo "    Change URL used for getting news."
 	echo "    This can't be mixed with --staging option."
+	echo "  --debug, -d"
+	echo "    Print shell debug/trace information."
 }
 
 
@@ -171,6 +173,9 @@ while [ $# -gt 0 -a -z "$OP" ]; do
 		--url)
 			shift
 			URL="$1"
+			;;
+		-d|--debug)
+			set -x
 			;;
 		update)
 			OP=op_update
